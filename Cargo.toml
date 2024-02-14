@@ -1,0 +1,13 @@
+[package]
+name = "efw2-maker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arrayvec = "0.7.4"
+clap = { version = "4.5.0", features = ["derive"] }
+csv = "1.3.0"
+serde = { version = "1.0", features = ["derive"] }
+unidecode = "0.3.0"
