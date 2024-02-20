@@ -37,6 +37,7 @@ pub struct W2Info {
 	pub first_name: String,
 	pub middle_initial: String,
 	pub last_name: String,
+	#[serde(default)]
 	pub suffix: String,
 	pub address_1: String,
 	#[serde(default)]
@@ -54,9 +55,13 @@ pub struct W2Info {
 	pub medicare_tax: f64,
 	#[serde(default)]
 	pub ss_tips: f64,
+	#[serde(default)]
 	pub taxing_state: String,
+	#[serde(default)]
 	pub state_id: String,
+	#[serde(default)]
 	pub state_wages: f64,
+	#[serde(default)]
 	pub state_tax: f64,
 }
 
@@ -95,13 +100,13 @@ fn main() {
 	let vendor_code = "\0\0\0\0";
 	let software_code = "98";
 	let company_name = format_text_field(&config.company_name, 57);
-	let address_1 = format_text_field(&config.address_1, 22);
-	let address_2 = format_text_field(&config.address_2.unwrap_or_default(), 22);
+	let address_1 = format_text_field(&config.address_1.replace(".", ""), 22);
+	let address_2 = format_text_field(&config.address_2.unwrap_or_default().replace(".", ""), 22);
 	let city = format_text_field(&config.city, 22);
 	let state = format_text_field(&config.state, 2);
 	let zip = format_text_field(&config.zip, 5);
 	let zip_ext = "\0\0\0\0";
-	let contact_name = format_text_field(&config.contact_name, 27);
+	let contact_name = format_text_field(&config.contact_name.replace(".", ""), 27);
 	let phone = format_text_field(&config.phone.replace("-", ""), 15);
 	let email = format_text_field(&config.email, 40);
 	let fax = format_text_field(&config.fax.unwrap_or_default().replace("-", ""), 10);
@@ -250,11 +255,228 @@ fn main() {
 		/* Blank (319–512) */
 		&"\0".repeat(194);
 	assert!(re_record.len() == 512, "RA record must be 512 characters long, not {}", re_record.len());
+
+	let mut total_wages = 0.0;
+	let mut total_federal_tax = 0.0;
+	let mut total_ss_wages = 0.0;
+	let mut total_ss_tax = 0.0;
+	let mut total_medicare_wages = 0.0;
+	let mut total_medicare_tax = 0.0;
+	let mut total_ss_tips = 0.0;
+	let rw_records: Vec<String> = w2_info.iter().map(|line| {
+		let ssn = str::replace(&line.ssn, "-", "");
+		let first_name = format_text_field(&line.first_name, 15);
+		let middle_initial = format_text_field(&line.middle_initial.replace(".", ""), 15);
+		let last_name = format_text_field(&line.last_name, 20);
+		let suffix = format_text_field(&line.suffix, 4);
+		let address_1 = format_text_field(&line.address_1.replace(".", ""), 22);
+		let address_2 = format_text_field(&line.address_2.replace(".", ""), 22);
+		let city = format_text_field(&line.city, 22);
+		let state = format_text_field(&line.state, 2);
+		let zip = format_text_field(&line.zip, 5);
+		let zip_ext = "\0\0\0\0";
+		let wages = format_number_field(line.wages, 11);
+		let federal_tax = format_number_field(line.federal_tax, 11);
+		let ss_wages = format_number_field(line.ss_wages, 11);
+		let ss_tax = format_number_field(line.ss_tax, 11);
+		let medicare_wages = format_number_field(line.medicare_wages, 11);
+		let medicare_tax = format_number_field(line.medicare_tax, 11);
+		let ss_tips = format_number_field(line.ss_tips, 11);
+
+		total_wages += line.wages;
+		total_federal_tax += line.federal_tax;
+		total_ss_wages += line.ss_wages;
+		total_ss_tax += line.ss_tax;
+		total_medicare_wages += line.medicare_wages;
+		total_medicare_tax += line.medicare_tax;
+		total_ss_tips += line.ss_tips;
+
+		let rw_record =
+			/* Record Identifier (1–2) */
+			"RW".to_owned() +
+			/* Employee SSN (3–11) */
+			&ssn +
+			/* Employee First Name (12–26) */
+			&first_name +
+			/* Employee Middle Initial (27–41) */
+			&middle_initial +
+			/* Employee Last Name (42–61) */
+			&last_name +
+			/* Employee Suffix (62–65) */
+			&suffix +
+			/* Employee Location (66–87) */
+			&address_2 +
+			/* Employee Delivery Address (88–109) */
+			&address_1 +
+			/* Employee City (110–131) */
+			&city +
+			/* Employee State (132–133) */
+			&state +
+			/* Employee ZIP Code (134–142) */
+			&zip + zip_ext +
+			/* Blank (143–147) */
+			"\0\0\0\0\0" +
+			/* Employee Foreign State/Province (148–170) */
+			&"\0".repeat(23) +
+			/* Employee Foreign Postal Code (171–185) */
+			&"\0".repeat(15) +
+			/* Employee Country Code (186–187) */
+			"US" +
+			/* Employee Wages (188–198) */
+			&wages +
+			/* Federal Income Tax Withheld (199–209) */
+			&federal_tax +
+			/* Social Security Wages (210–220) */
+			&ss_wages +
+			/* Social Security Tax Withheld (221–231) */
+			&ss_tax +
+			/* Medicare Wages (232–242) */
+			&medicare_wages +
+			/* Medicare Tax Withheld (243–253) */
+			&medicare_tax +
+			/* Social Security Tips (254–264) */
+			&ss_tips +
+			/* Blank (265–275) */
+			&"\0".repeat(11) +
+			/* Dependent Care Benefits (276–286) */
+			&"\0".repeat(11) +
+			/* Deferred Compensation Contributions to 401(k) (287–297) */
+			&"\0".repeat(11) +
+			/* Deferred Compensation Contributions to 403(b) (298–308) */
+			&"\0".repeat(11) +
+			/* Deferred Compensation Contributions to 408(k)(6) (309–319) */
+			&"\0".repeat(11) +
+			/* Deferred Compensation Contributions to 457(b) (320–330) */
+			&"\0".repeat(11) +
+			/* Deferred Compensation Contributions to 501(c)(18)(D) (331–341) */
+			&"\0".repeat(11) +
+			/* Blank (342–352) */
+			&"\0".repeat(11) +
+			/* Nonqualified §457 Distributions or Contributions (353–363) */
+			&"\0".repeat(11) +
+			/* Employer HSA Contributions (364–374) */
+			&"\0".repeat(11) +
+			/* Nonqualified Non-§457 Distributions or Contributions (375–385) */
+			&"\0".repeat(11) +
+			/* Nontaxable Combat Pay (386–396) */
+			&"\0".repeat(11) +
+			/* Blank (397–407) */
+			&"\0".repeat(11) +
+			/* Employer Life Insurance Premiums over $50,000 (408–418) */
+			&"\0".repeat(11) +
+			/* Income from Exercise of Nonstatutory Stock Options (419–429) */
+			&"\0".repeat(11) +
+			/* Deferrals under §409A Nonqualified Deferred Compensation (430–440) */
+			&"\0".repeat(11) +
+			/* Designated 401(k) Roth Contributions (441–451) */
+			&"\0".repeat(11) +
+			/* Designated 403(b) Roth Contributions (452–462) */
+			&"\0".repeat(11) +
+			/* Cost of Employer-Sponsored Health Coverage (463–473) */
+			&"\0".repeat(11) +
+			/* Permitted Benefits under a Qualified Small Employer HRA (474–484) */
+			&"\0".repeat(11) +
+			/* Blank (485) */
+			"\0" +
+			/* Statutory Employee Indicator (486) */
+			"0" +
+			/* Blank (487) */
+			"\0" +
+			/* Retirement Plan Indicator (488) */
+			"0" +
+			/* Third-Party Sick Pay Indicator (489) */
+			"0" +
+			/* Blank (490–512) */
+			&"\0".repeat(23);
+
+		assert!(rw_record.len() == 512, "RW record must be 512 characters long, not {}", rw_record.len());
+
+		rw_record
+	}).collect();
+
+	let rt_record =
+		/* Record Identifier (1–2) */
+		"RT".to_owned() +
+		/* Total Number of RW Records (3–9) */
+		&format!("{:0>7}", w2_info.len()) +
+		/* Total Wages (10–24) */
+		&format_number_field(total_wages, 15) +
+		/* Total Federal Income Tax Withheld (25–39) */
+		&format_number_field(total_federal_tax, 15) +
+		/* Total Social Security Wages (40–54) */
+		&format_number_field(total_ss_wages, 15) +
+		/* Total Social Security Tax Withheld (55–69) */
+		&format_number_field(total_ss_tax, 15) +
+		/* Total Medicare Wages (70–84) */
+		&format_number_field(total_medicare_wages, 15) +
+		/* Total Medicare Tax Withheld (85–99) */
+		&format_number_field(total_medicare_tax, 15) +
+		/* Total Social Security Tips (100–114) */
+		&format_number_field(total_ss_tips, 15) +
+		/* Blank (115–129) */
+		&"\0".repeat(15) +
+		/* Total Dependent Care Benefits (130–144) */
+		&"\0".repeat(15) +
+		/* Total Deferred Compensation Contributions to 401(k)s (145–159) */
+		&"\0".repeat(15) +
+		/* Total Deferred Compensation Contributions to 403(b)s (160–174) */
+		&"\0".repeat(15) +
+		/* Total Deferred Compensation Contributions to 408(k)(6)s (175–189) */
+		&"\0".repeat(15) +
+		/* Total Deferred Compensation Contributions to 457(b)s (190–204) */
+		&"\0".repeat(15) +
+		/* Total Deferred Compensation Contributions to 501(c)(18)(D)s (205–219) */
+		&"\0".repeat(15) +
+		/* Blank (220–234) */
+		&"\0".repeat(15) +
+		/* Total Nonqualified §457 Distributions or Contributions (235–249) */
+		&"\0".repeat(15) +
+		/* Total Employer HSA Contributions (250–264) */
+		&"\0".repeat(15) +
+		/* Total Nonqualified Non-§457 Distributions or Contributions (265–279) */
+		&"\0".repeat(15) +
+		/* Total Nontaxable Combat Pay (280–294) */
+		&"\0".repeat(15) +
+		/* Total Cost of Employer-Sponsored Health Coverage (295–309) */
+		&"\0".repeat(15) +
+		/* Total Employer Life Insurance Premiums over $50,000 (310–324) */
+		&"\0".repeat(15) +
+		/* Total Income Tax Withheld for Third-Party Sick Pay (325–339) */
+		&"\0".repeat(15) +
+		/* Total Income from Exercise of Nonstatutory Stock Options (340–354) */
+		&"\0".repeat(15) +
+		/* Total Deferrals under §409A Nonqualified Deferred Compensation (355–369) */
+		&"\0".repeat(15) +
+		/* Total Designated 401(k) Roth Contributions (370–384) */
+		&"\0".repeat(15) +
+		/* Total Designated 403(b) Roth Contributions (385–399) */
+		&"\0".repeat(15) +
+		/* Total Permitted Benefits under a Qualified Small Employer HRA (400–414) */
+		&"\0".repeat(15) +
+		/* Blank (415–512) */
+		&"\0".repeat(98);
+	assert!(rt_record.len() == 512, "RT record must be 512 characters long, not {}", rt_record.len());
+
+	let rf_record =
+		/* Record Identifier (1–2) */
+		"RF".to_owned() +
+		/* Blank (3–7) */
+		&"\0".repeat(5) +
+		/* Total Number of RW Records (8–16) */
+		&format!("{:0>9}", w2_info.len()) +
+		/* Blank (17–512) */
+		&"\0".repeat(496);
 	
-	print!("{}{}", ra_record, re_record);
+	print!("{}{}{}{}{}", ra_record, re_record, rw_records.join(""), rt_record, rf_record);
 }
 
 fn format_text_field(value: &str, length: usize) -> String {
 	assert!(value.len() <= length, "\"{}\" too long. Must be {} or fewer characters.", value, length);
 	return format!("{:\0<width$}", unidecode(value).to_uppercase(), width = length);
+}
+
+fn format_number_field(value: f64, length: usize) -> String {
+	let value = format!("{:0>width$.0}", value * 100.0, width = length);
+	assert!(value.len() <= length, "\"{}\" too long. Must be {} or fewer characters.", value, length);
+	value
 }
