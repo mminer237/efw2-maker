@@ -1,0 +1,44 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-gnu
+            extension: .exe
+          - target: x86_64-unknown-linux-musl
+            extension: ""
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: Swatinem/rust-cache@v2
+
+    - name: Build
+      uses: houseabsolute/actions-rust-cross@v0
+      with:
+        target: ${{ matrix.target }}
+        args: "--release"
+        strip: true
+
+    - name: Upload Release
+      uses: softprops/action-gh-release@v0.1.15
+      with:
+        files: |
+          target/${{ matrix.target}}/release/efw2-maker${{ matrix.extension }}
